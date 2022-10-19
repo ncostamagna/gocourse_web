@@ -2,8 +2,9 @@ package user
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 type (
@@ -24,8 +25,17 @@ type (
 		Phone     string `json:"phone"`
 	}
 
-	ErrorRes struct {
-		Error string `json:"error"`
+	UpdateReq struct {
+		FirstName *string `json:"first_name"`
+		LastName  *string `json:"last_name"`
+		Email     *string `json:"email"`
+		Phone     *string `json:"phone"`
+	}
+
+	Response struct {
+		Status int         `json:"status"`
+		Data   interface{} `json:"data,omitempty"`
+		Err    string      `json:"error,omitempty"`
 	}
 )
 
@@ -48,55 +58,105 @@ func makeCreateEndpoint(s Service) Controller {
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"invalid request format"})
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: "invalid request format"})
 			return
 		}
 
 		if req.FirstName == "" {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"first name is required"})
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: "first name is required"})
 			return
 		}
 
 		if req.LastName == "" {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"last name is required"})
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: "last name is required"})
 			return
 		}
 
-		err := s.Create(req.FirstName, req.LastName, req.Email, req.Phone)
+		user, err := s.Create(req.FirstName, req.LastName, req.Email, req.Phone)
 		if err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: err.Error()})
 			return
 		}
 
-		json.NewEncoder(w).Encode(req)
+		json.NewEncoder(w).Encode(&Response{Status: 200, Data: user})
 	}
 }
 func makeGetAllEndpoint(s Service) Controller {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("getall user")
-		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		users, err := s.GetAll()
+		if err != nil {
+			w.WriteHeader(400)
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: err.Error()})
+			return
+		}
+
+		json.NewEncoder(w).Encode(&Response{Status: 200, Data: users})
 	}
 }
 func makeGetEndpoint(s Service) Controller {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("get user")
-		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		path := mux.Vars(r)
+		id := path["id"]
+		user, err := s.Get(id)
+		if err != nil {
+			w.WriteHeader(404)
+			json.NewEncoder(w).Encode(&Response{Status: 404, Err: "user doesn't exist"})
+			return
+		}
+
+		json.NewEncoder(w).Encode(&Response{Status: 200, Data: user})
 	}
 }
 
 func makeUpdateEndpoint(s Service) Controller {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("update user")
-		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		var req UpdateReq
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(400)
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: "invalid request format"})
+			return
+		}
+
+		if req.FirstName != nil && *req.FirstName == "" {
+			w.WriteHeader(400)
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: "first name is required"})
+			return
+		}
+
+		if req.LastName != nil && *req.LastName == "" {
+			w.WriteHeader(400)
+			json.NewEncoder(w).Encode(&Response{Status: 400, Err: "last name is required"})
+			return
+		}
+
+		path := mux.Vars(r)
+		id := path["id"]
+
+		if err := s.Update(id, req.FirstName, req.LastName, req.Email, req.Phone); err != nil {
+			w.WriteHeader(404)
+			json.NewEncoder(w).Encode(&Response{Status: 404, Err: "user doesn't exist"})
+			return
+		}
+
+		json.NewEncoder(w).Encode(&Response{Status: 200, Data: "success"})
 	}
 }
 
 func makeDeleteEndpoint(s Service) Controller {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("delete user")
-		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		path := mux.Vars(r)
+		id := path["id"]
+
+		if err := s.Delete(id); err != nil {
+			w.WriteHeader(404)
+			json.NewEncoder(w).Encode(&Response{Status: 404, Err: "user doesn't exist"})
+			return
+		}
+
+		json.NewEncoder(w).Encode(&Response{Status: 200, Data: "success"})
 	}
 }
