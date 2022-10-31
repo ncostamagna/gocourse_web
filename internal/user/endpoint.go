@@ -3,8 +3,10 @@ package user
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/ncostamagna/gocourse_web/pkg/meta"
 )
 
 type (
@@ -36,6 +38,7 @@ type (
 		Status int         `json:"status"`
 		Data   interface{} `json:"data,omitempty"`
 		Err    string      `json:"error,omitempty"`
+		Meta   *meta.Meta  `json:"meta,omitempty"`
 	}
 )
 
@@ -86,14 +89,39 @@ func makeCreateEndpoint(s Service) Controller {
 }
 func makeGetAllEndpoint(s Service) Controller {
 	return func(w http.ResponseWriter, r *http.Request) {
-		users, err := s.GetAll()
+
+		v := r.URL.Query()
+
+		filters := Filters{
+			FirstName: v.Get("first_name"),
+			LastName:  v.Get("last_name"),
+		}
+
+		limit, _ := strconv.Atoi(v.Get("limit"))
+		page, _ := strconv.Atoi(v.Get("page"))
+
+		count, err := s.Count(filters)
+		if err != nil {
+			w.WriteHeader(500)
+			json.NewEncoder(w).Encode(&Response{Status: 500, Err: err.Error()})
+			return
+		}
+
+		meta, err := meta.New(page, limit, count)
+		if err != nil {
+			w.WriteHeader(500)
+			json.NewEncoder(w).Encode(&Response{Status: 500, Err: err.Error()})
+			return
+		}
+
+		users, err := s.GetAll(filters, meta.Offset(), meta.Limit())
 		if err != nil {
 			w.WriteHeader(400)
 			json.NewEncoder(w).Encode(&Response{Status: 400, Err: err.Error()})
 			return
 		}
 
-		json.NewEncoder(w).Encode(&Response{Status: 200, Data: users})
+		json.NewEncoder(w).Encode(&Response{Status: 200, Data: users, Meta: meta})
 	}
 }
 func makeGetEndpoint(s Service) Controller {
