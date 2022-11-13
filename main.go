@@ -33,7 +33,7 @@ func main() {
 	courseEnd := course.MakeEndpoints(courseSrv)
 
 	enrollRepo := enrollment.NewRepo(db, l)
-	enrollSrv := enrollment.NewService(l, enrollRepo)
+	enrollSrv := enrollment.NewService(l, userSrv, courseSrv, enrollRepo)
 	enrollEnd := enrollment.MakeEndpoints(enrollSrv)
 
 	router.HandleFunc("/users", userEnd.Create).Methods("POST")
